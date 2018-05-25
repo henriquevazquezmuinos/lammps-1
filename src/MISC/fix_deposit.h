@@ -46,6 +46,8 @@ class FixDeposit : public Fix {
   double tx,ty,tz;
   char *idregion;
   char *idrigid,*idshake;
+  char *file;
+  FILE *outfile;
 
   class Molecule **onemols;
   int nmol,natom_max;

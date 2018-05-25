@@ -193,6 +193,14 @@ FixDeposit::FixDeposit(LAMMPS *lmp, int narg, char **arg) :
   next_reneighbor = update->ntimestep + 1;
   nfirst = next_reneighbor;
   ninserted = 0;
+
+  outfile = NULL;
+  if (file && comm->me == 0) {
+    outfile = fopen(file, "w");
+    if (!outfile) error->all(FLERR,"Cannot open fix deposit output file");
+    fprintf(outfile, "# num id type x y z vx vy vz\n");
+    fflush(outfile);
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -206,6 +214,7 @@ FixDeposit::~FixDeposit()
   delete [] idregion;
   memory->destroy(coords);
   memory->destroy(imageflags);
+  if (outfile) fclose(outfile);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -489,6 +498,16 @@ void FixDeposit::pre_exchange()
       }
     }
 
+    // write atom details to file, if specified
+
+    if (outfile) {
+      fprintf(outfile, "%8d %8d %2d %20.10f %20.10f %20.10f %20.10f %20.10f %20.10f\n",
+          ninserted, maxtag_all + 1, ntype,
+          coord[0], coord[1], coord[2],
+          vnew[0], vnew[1], vnew[2]);
+      fflush(outfile);
+    }
+
     // check if new atoms are in my sub-box or above it if I am highest proc
     // if so, add atom to my list via create_atom()
     // initialize additional info about the atoms
@@ -659,6 +678,7 @@ void FixDeposit::options(int narg, char **arg)
   xmid = ymid = zmid = 0.0;
   scaleflag = 1;
   targetflag = 0;
+  file = NULL;
 
   int iarg = 0;
   while (iarg < narg) {
@@ -787,6 +807,12 @@ void FixDeposit::options(int narg, char **arg)
       tz = force->numeric(FLERR,arg[iarg+3]);
       targetflag = 1;
       iarg += 4;
+
+    } else if (strcmp(arg[iarg],"file") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal fix deposit command");
+      file=arg[iarg+1];
+      if (file[0] == '\0') error->all(FLERR,"Illegal fix deposit command");
+      iarg += 2;
     } else error->all(FLERR,"Illegal fix deposit command");
   }
 }
