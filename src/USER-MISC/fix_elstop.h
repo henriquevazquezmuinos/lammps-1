@@ -43,19 +43,18 @@ class FixElstop : public Fix {
   double compute_scalar();
 
  private:
-  double Ecut;	// E_stop cutoff energy
+  double Ecut;     // E_stop cutoff energy
   //double ftm2v;  // conversion of ft/m to velocity
-  //double dt; // timestep
+  //double dt;     // timestep
   double SeLoss, SeLoss_all; // Electronic energy loss
   int eflag;
   int table_entries;
-  double **elstop_ranges; 
+  double **elstop_ranges;
   int respaflag;
   int regionflag;
   int iregion;
   char *idregion;
   char *file_name;
-  char *groupname; 
   class NeighList *list;
   class Compute *c_ke;
 };
@@ -72,10 +71,5 @@ E: Illegal ... command
 Self-explanatory.  Check the input script syntax and compare to the
 documentation for the command.  You can use -echo screen as a
 command-line option when running LAMMPS to see the offending line.
-
-W: Dump dcd/xtc timestamp may be wrong with fix dt/reset
-
-If the fix changes the timestep, the dump dcd file will not
-reflect the change.
 
 */

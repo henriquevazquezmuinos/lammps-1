@@ -15,11 +15,11 @@
    Updated: 18th of May 2015. Information: konstantin.avchachov@helsinki.fi
 ------------------------------------------------------------------------- */
 
-#include "mpi.h"
-#include "math.h"
-#include "stdlib.h"
-#include "string.h"
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include "fix_elstop.h"
+#include "mpi.h"
 #include "atom.h"
 #include "update.h"
 #include "domain.h"
@@ -36,10 +36,7 @@
 #include "neighbor.h"
 #include "neigh_list.h"
 #include "neigh_request.h"
-#include <iostream> // For cout capabilities (good for debugging)
-#include <string> // For cout string capabilities (good for debugging)
 
-using namespace std;
 using namespace LAMMPS_NS;
 using namespace FixConst;
 
@@ -50,45 +47,36 @@ using namespace FixConst;
 
 /* ---------------------------------------------------------------------- */
 
-template<typename T>
-T signum(T n)
-{
-if (n < 0) return -1;
-if (n > 0) return 1;
-return 0;
-}
-
-/* ---------------------------------------------------------------------- */
-
 FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   Fix(lmp, narg, arg)
 {
   if (narg < 5) error->all(FLERR,"Illegal fix elstop command");
 
   // set time_depend, else elapsed time accumulation can be messed up
+  time_depend = 1;
 
-  time_depend = 1; //?????
-  scalar_flag = 1;
-  global_freq = 1;
-  extscalar = 0;
-  extvector = 0;
+  scalar_flag = 1;  // Has compute_scalar
+  global_freq = 1;  // SeLoss computed every step
+  extscalar = 0;    // SeLoss is intensive???
+  nevery = 1;       // Run fix every step
 
-  regionflag = 0; 
+  regionflag = 0;
   iregion = -1;
 
   int iarg = 0;
 
+  // args: 0 = fix ID, 1 = group ID,  2 = "elstop"
+  //       3 = Ecut,   4 = file path
+  // optional rest: "region" region name
+
   // reading in the numerical parameters from fix ID group-ID elstop N Ecut:
-  nevery = 1;	// Do this every step
-  groupname=group->names[igroup];
-  Ecut = force->numeric(FLERR,arg[3]);
-  
+  Ecut = force->numeric(FLERR, arg[3]);
+  if (Ecut <= 0.0) error->all(FLERR,"Illegal fix elstop command: cutoff energy cannot be 0 or negative!");
+
   int n = strlen(arg[4]) + 1;
   file_name = new char[n];
-  strcpy(file_name,arg[4]);
-  
-  if (Ecut <= 0.0) error->all(FLERR,"Illegal fix elstop command: cutoff energy cannot be 0 or negative!");
- 
+  strcpy(file_name, arg[4]);
+
   iarg = 5;
   // reading in the regions
   while (iarg < narg) {
@@ -96,7 +84,7 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
       if (iarg+2 > narg) error->all(FLERR,"Illegal fix elstop command: region name missing!");
       iregion = domain->find_region(arg[iarg+1]);
       if (iregion == -1)
-        error->all(FLERR,"REGION (not group) ID for fix elstop does not exist");
+        error->all(FLERR,"region ID for fix elstop does not exist");
       int n = strlen(arg[iarg+1]) + 1;
       idregion = new char[n];
       strcpy(idregion,arg[iarg+1]);
@@ -141,7 +129,7 @@ void FixElstop::init()
   if (ikeatom < 0 ){
 	  char **newarg = new char*[3];
 		newarg[0] = (char *) "ke_atom";
-		newarg[1] = groupname;
+		newarg[1] = group->names[igroup];
 		newarg[2] = (char *) "ke/atom";
 		modify->add_compute(3,newarg);
 		ikeatom = modify->find_compute("ke_atom");
@@ -203,6 +191,7 @@ void FixElstop::post_force(int vflag)
 
   for (int i = 0; i < nlocal; ++i){
 
+
     if (regionflag) {
       if (domain->regions[iregion]->match(x[i][0],x[i][1],x[i][2]) != 1) continue;  // Start stopping when the group has entered a predefined region
     }
@@ -212,6 +201,7 @@ void FixElstop::post_force(int vflag)
         int iup=0, idown=1, ihalf=0;
 		int itype = type[i];
         ENERGY=ke[i];
+  	  fprintf(screen, "HERE %d %d %g %g %g %d\n", i, type[i], ke[i], ENERGY, elstop_ranges[0][table_entries-1], table_entries);
         
        // for (int n = 0; n < 3; n++)
        //fprintf(screen, "Debugging >> speed in %i-direction: %4.5f | force: %4.5f | energy: %4.5f | timestep length: %2.7f \n ", n, v[i][n], f[i][n], ENERGY, dt);
@@ -269,30 +259,35 @@ void FixElstop::read_table(char *file)
 
   const int nt = atom->ntypes + 1;
 
-  if (fgets(line,MAXLINE,fp) == NULL)
-      error->one(FLERR,"Did not find any data in table file");
+  // Why skip the first line???
+  //if (fgets(line,MAXLINE,fp) == NULL)
+  //    error->one(FLERR,"Did not find any data in table file");
 
-  int l=0;
+  int l = 0;
   while (l < MAXTABLEN) {
-    if (fgets(line,MAXLINE,fp) == NULL) break;                         // no match, skip section
-    if (line == NULL) break;     
+    if (fgets(line, MAXLINE, fp) == NULL) break; // no match, skip section
+    if (line[0] == '#') continue; // comment
     if (strspn(line," \t\n\r") == strlen(line)) continue;  // blank line
-    if (line[0] == '#') continue;                          // comment
-    
-    //fprintf(screen, "line %d: %s\n", l, line);
-	char * pch;
-    pch = strtok (line," \t\n\r");
+
+    // fprintf(screen, "line %d: %s\n", l, line);
+    char *pch = strtok (line," \t\n\r");
     for (int i = 0; i < nt; i++){
-        elstop_ranges[i][l]=atof(pch);
+    	fprintf(screen, "line %d word %d: '%s' = %g\n", l, i, pch, atof(pch));
+        elstop_ranges[i][l] = atof(pch);
         pch = strtok (NULL, " \t\n\r");
     }
     l++;
   }
   table_entries=l;
 
+  if (table_entries == 0) error->one(FLERR,"Did not find any data in table file");
+
   if (fgets(line,MAXLINE,fp) != NULL){
-    fprintf(screen, "Warning: Only 300 entries have been read from the elstop table\n Please increase MAXTABLEN=%i value and recompile\n", table_entries);
+    fprintf(screen, "Warning: Only %d entries have been read from the elstop table\n"
+                    "Please increase MAXTABLEN=%d value and recompile\n",
+                    MAXTABLEN, table_entries);
   }
+
   fclose(fp);
 }
 
@@ -307,6 +302,3 @@ double FixElstop::compute_scalar()
   }
   return SeLoss_all;
 }
-
-
-/* ---------------------------------------------------------------------- */
