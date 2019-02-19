@@ -124,28 +124,28 @@ void FixElstop::init()
   // set rRESPA (Reversible reference system propagation algorithm) flag
   respaflag = 0;
   if (strstr(update->integrate_style,"respa")) respaflag = 1;
- 
+
   int ikeatom = modify->find_compute("ke_atom");
   if (ikeatom < 0 ){
-	  char **newarg = new char*[3];
-		newarg[0] = (char *) "ke_atom";
-		newarg[1] = group->names[igroup];
-		newarg[2] = (char *) "ke/atom";
-		modify->add_compute(3,newarg);
-		ikeatom = modify->find_compute("ke_atom");
-		delete [] newarg;
+    char **newarg = new char*[3];
+    newarg[0] = (char *) "ke_atom";
+    newarg[1] = group->names[igroup];
+    newarg[2] = (char *) "ke/atom";
+    modify->add_compute(3,newarg);
+    ikeatom = modify->find_compute("ke_atom");
+    delete [] newarg;
   }
-  
+
   c_ke = modify->compute[ikeatom];
 
-  
+
   memory->create(elstop_ranges,nt, MAXTABLEN, "elstop:tabs");
   memset(&elstop_ranges[0][0],0,nt*MAXTABLEN*sizeof(double));
-  
+
   if (comm->me == 0){
     read_table(file_name);
   }
-  
+
   MPI_Bcast(&table_entries, 1 , MPI_INT, 0, world);
   MPI_Bcast(&elstop_ranges[0][0],nt*MAXTABLEN,MPI_DOUBLE,0,world);
 
@@ -171,7 +171,7 @@ void FixElstop::init_list(int id, NeighList *ptr)
 void FixElstop::post_force(int vflag)
 {
   double **x = atom->x;
-  double **v = atom->v;		
+  double **v = atom->v;
   double **f = atom->f;
 
   int *type = atom->type;
@@ -179,7 +179,7 @@ void FixElstop::post_force(int vflag)
   int nlocal = atom->nlocal;	// number of atoms in the group
   int *numneigh;
   int i;
-  double ENERGY;	
+  double ENERGY;
 
   eflag = 0;
   c_ke->invoked_peratom = 1;
@@ -196,18 +196,18 @@ void FixElstop::post_force(int vflag)
       if (domain->regions[iregion]->match(x[i][0],x[i][1],x[i][2]) != 1) continue;  // Start stopping when the group has entered a predefined region
     }
 
-   if (numneigh[i]> MINNEIGHB ) {  // Avoiding dimers, trimers and even tetramers in case of really high energies
+    if (numneigh[i]> MINNEIGHB ) {  // Avoiding dimers, trimers and even tetramers in case of really high energies
       if (mask[i] & groupbit) {
         int iup=0, idown=1, ihalf=0;
-		int itype = type[i];
+        int itype = type[i];
         ENERGY=ke[i];
-  	  fprintf(screen, "HERE %d %d %g %g %g %d\n", i, type[i], ke[i], ENERGY, elstop_ranges[0][table_entries-1], table_entries);
-        
-       // for (int n = 0; n < 3; n++)
-       //fprintf(screen, "Debugging >> speed in %i-direction: %4.5f | force: %4.5f | energy: %4.5f | timestep length: %2.7f \n ", n, v[i][n], f[i][n], ENERGY, dt);
-       
-       /* ---------------------------------------------------------------------- */
-          
+        fprintf(screen, "HERE %d %d %g %g %g %d\n", i, type[i], ke[i], ENERGY, elstop_ranges[0][table_entries-1], table_entries);
+
+        // for (int n = 0; n < 3; n++)
+        //fprintf(screen, "Debugging >> speed in %i-direction: %4.5f | force: %4.5f | energy: %4.5f | timestep length: %2.7f \n ", n, v[i][n], f[i][n], ENERGY, dt);
+
+        /* ---------------------------------------------------------------------- */
+
         if (ENERGY >= Ecut && ENERGY >= elstop_ranges[0][0] && ENERGY <= elstop_ranges[0][table_entries-1] ) {
           double Se, Se_lo, Se_hi, E_lo, E_hi;
           iup=table_entries-1; idown=0;
@@ -217,29 +217,29 @@ void FixElstop::post_force(int vflag)
             if (elstop_ranges[0][ihalf] < ENERGY) idown=ihalf;
             else iup=ihalf;
           }
-		  Se_lo = elstop_ranges[itype][idown];
-		  Se_hi = elstop_ranges[itype][iup];
-		  E_lo = elstop_ranges[0][idown];
-		  E_hi = elstop_ranges[0][iup];
+          Se_lo = elstop_ranges[itype][idown];
+          Se_hi = elstop_ranges[itype][iup];
+          E_lo = elstop_ranges[0][idown];
+          E_hi = elstop_ranges[0][iup];
 
           /* Get elstop with a simple linear interpolation */
           Se=(Se_hi-Se_lo)/(E_hi-E_lo)*(ENERGY-E_lo)+Se_lo;
 
-		  double v2 = 0.0;
+          double v2 = 0.0;
           for (int n=0 ; n<3 ; ++n ) {
-			v2+=v[i][n]*v[i][n];
+            v2+=v[i][n]*v[i][n];
           }
 
-		  //fprintf(screen, "Debugging >> %lf %lf %lf %i %i\n", Se, ENERGY, dt, idown,  iup);
+          //fprintf(screen, "Debugging >> %lf %lf %lf %i %i\n", Se, ENERGY, dt, idown,  iup);
           for (int n=0 ; n<3 ; ++n ) {
             f[i][n] = f[i][n]-v[i][n]/sqrt(v2)*Se;
           }
-		  SeLoss+=Se*sqrt(v2)*dt; //very rough approx
+          SeLoss+=Se*sqrt(v2)*dt; //very rough approx
         }
 
-       /* ---------------------------------------------------------------------- */
+        /* ---------------------------------------------------------------------- */
 
-      }    
+      }
     }
   }
 }
@@ -249,7 +249,7 @@ void FixElstop::read_table(char *file)
   char line[MAXLINE];
 
   fprintf(screen, "Reading file %s\n", file);
- 
+
   FILE *fp = force->open_potential(file);
   if (fp == NULL) {
     char str[128];
@@ -272,9 +272,9 @@ void FixElstop::read_table(char *file)
     // fprintf(screen, "line %d: %s\n", l, line);
     char *pch = strtok (line," \t\n\r");
     for (int i = 0; i < nt; i++){
-    	fprintf(screen, "line %d word %d: '%s' = %g\n", l, i, pch, atof(pch));
-        elstop_ranges[i][l] = atof(pch);
-        pch = strtok (NULL, " \t\n\r");
+      fprintf(screen, "line %d word %d: '%s' = %g\n", l, i, pch, atof(pch));
+      elstop_ranges[i][l] = atof(pch);
+      pch = strtok (NULL, " \t\n\r");
     }
     l++;
   }
@@ -284,8 +284,8 @@ void FixElstop::read_table(char *file)
 
   if (fgets(line,MAXLINE,fp) != NULL){
     fprintf(screen, "Warning: Only %d entries have been read from the elstop table\n"
-                    "Please increase MAXTABLEN=%d value and recompile\n",
-                    MAXTABLEN, table_entries);
+        "Please increase MAXTABLEN=%d value and recompile\n",
+        MAXTABLEN, table_entries);
   }
 
   fclose(fp);
