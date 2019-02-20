@@ -25,8 +25,6 @@ FixStyle(elstop,FixElstop)
 #define LMP_FIX_ELSTOP_H
 
 #include "fix.h"
-#include "neighbor.h"
-#include "compute.h"
 
 
 namespace LAMMPS_NS {
