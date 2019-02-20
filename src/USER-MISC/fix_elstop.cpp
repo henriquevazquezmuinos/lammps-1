@@ -62,7 +62,7 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   if (narg < 5) error->all(FLERR, "Illegal fix elstop command: too few arguments");
 
   Ecut = force->numeric(FLERR, arg[3]);
-  if (Ecut <= 0.0) error->all(FLERR, "Illegal fix elstop command: cutoff energy cannot be 0 or negative");
+  if (Ecut <= 0.0) error->all(FLERR, "Illegal fix elstop command: Ecut <= 0");
 
   int n = strlen(arg[4]) + 1;
   file_name = new char[n];
@@ -74,18 +74,23 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
 
   while (iarg < narg) {
     if (strcmp(arg[iarg], "region") == 0) {
-      if (iregion >= 0) error->all(FLERR, "Illegal fix elstop command: region given twice");
-      if (iarg+2 > narg) error->all(FLERR, "Illegal fix elstop command: region name missing");
+      if (iregion >= 0)
+         error->all(FLERR, "Illegal fix elstop command: region given twice");
+      if (iarg+2 > narg)
+        error->all(FLERR, "Illegal fix elstop command: region name missing");
       iregion = domain->find_region(arg[iarg+1]);
       if (iregion < 0)
         error->all(FLERR, "region ID for fix elstop does not exist");
       iarg += 2;
     }
     else if (strcmp(arg[iarg], "maxlines") == 0) {
-      if (maxlines > 0) error->all(FLERR, "Illegal fix elstop command: maxlines given twice");
-      if (iarg+2 > narg) error->all(FLERR, "Illegal fix elstop command: maxlines value missing");
+      if (maxlines > 0)
+        error->all(FLERR, "Illegal fix elstop command: maxlines given twice");
+      if (iarg+2 > narg)
+        error->all(FLERR, "Illegal fix elstop command: maxlines value missing");
       maxlines = force->numeric(FLERR, arg[iarg+1]);
-      if (maxlines <= 0) error->all(FLERR, "Illegal fix elstop command: maxlines <= 0");
+      if (maxlines <= 0)
+        error->all(FLERR, "Illegal fix elstop command: maxlines <= 0");
       iarg += 2;
     }
     else error->all(FLERR, "Illegal fix elstop command: unknown argument");
@@ -265,7 +270,8 @@ void FixElstop::read_table(const char *file)
   }
   table_entries = l;
 
-  if (table_entries == 0) error->one(FLERR, "Did not find any data in elstop table file");
+  if (table_entries == 0)
+    error->one(FLERR, "Did not find any data in elstop table file");
 
   if (fgets(line, MAXLINE, fp) != NULL)
     error->one(FLERR, "fix elstop: Table too long. Increase maxlines.");
