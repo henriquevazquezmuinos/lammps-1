@@ -15,6 +15,13 @@
    Updated: 18th of May 2015. Information: konstantin.avchachov@helsinki.fi
 ------------------------------------------------------------------------- */
 
+/*
+ * TODO:
+ * - documentation
+ * - examples
+ * - list of error messages in .h file?
+ */
+
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
