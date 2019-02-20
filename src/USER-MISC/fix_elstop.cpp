@@ -260,25 +260,28 @@ void FixElstop::read_table(const char *file)
     char *pch = strtok(line, " \t\n\r");
     if (pch == NULL) continue; // blank line
 
-    for (int i = 0; i < ncol; i++){
-      if (pch == NULL) error->one(FLERR, "fix elstop: Invalid table line");
+    int i = 0;
+    for ( ; i < ncol && pch != NULL; i++) {
       elstop_ranges[i][l] = atof(pch);
       pch = strtok(NULL, " \t\n\r");
     }
-    if (pch != NULL) error->one(FLERR, "fix elstop: Invalid table line");
+
+    if (i != ncol || pch != NULL) // too short or too long
+      error->one(FLERR, "fix elstop: Invalid table line");
+
     l++;
   }
   table_entries = l;
 
   if (table_entries == 0)
     error->one(FLERR, "Did not find any data in elstop table file");
-
   if (fgets(line, MAXLINE, fp) != NULL)
     error->one(FLERR, "fix elstop: Table too long. Increase maxlines.");
 
   fclose(fp);
 }
 
+/* ---------------------------------------------------------------------- */
 
 double FixElstop::compute_scalar()
 {
