@@ -49,17 +49,17 @@ using namespace FixConst;
 FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   Fix(lmp, narg, arg)
 {
-  if (narg < 5) error->all(FLERR, "Illegal fix elstop command: too few arguments");
-
   scalar_flag = 1;  // Has compute_scalar
   global_freq = 1;  // SeLoss computed every step
-  extscalar = 0;    // SeLoss is intensive???
+  extscalar = 0;    // SeLoss compute_scalar is intensive
   nevery = 1;       // Run fix every step
 
   // args: 0 = fix ID, 1 = group ID,  2 = "elstop"
   //       3 = Ecut,   4 = file path
   // optional rest: "region" <region name>
   //                "maxlines" <max number of lines in table>
+
+  if (narg < 5) error->all(FLERR, "Illegal fix elstop command: too few arguments");
 
   Ecut = force->numeric(FLERR, arg[3]);
   if (Ecut <= 0.0) error->all(FLERR, "Illegal fix elstop command: cutoff energy cannot be 0 or negative");
@@ -187,22 +187,23 @@ void FixElstop::post_force(int /*vflag*/)
 
   for (int i = 0; i < nlocal; ++i) {
 
+    // Do fast checks first, only then the region check
+
     // Avoiding dimers, trimers and even tetramers in case of really high energies
     if (numneigh[i] <= MINNEIGHB) continue;
 
     if (!(mask[i] & groupbit)) continue;
-
-    if (regionflag) {
-      // Only apply in the given region
-      if (domain->regions[iregion]->match(x[i][0], x[i][1], x[i][2]) != 1)
-        continue;
-    }
 
     double energy = ke[i];
     if (energy < Ecut) continue;
     if (energy < elstop_ranges[0][0]) continue;
     if (energy > elstop_ranges[0][table_entries - 1]) continue; // ???
 
+    if (regionflag) {
+      // Only apply in the given region
+      if (domain->regions[iregion]->match(x[i][0], x[i][1], x[i][2]) != 1)
+        continue;
+    }
 
     // Binary search to find correct energy range
     int iup = table_entries - 1;
