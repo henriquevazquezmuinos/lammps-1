@@ -72,7 +72,8 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   //       3 = Ecut,   4 = file path
   // optional rest: "region" <region name>
 
-  if (narg < 5) error->all(FLERR, "Illegal fix elstop command: too few arguments");
+  if (narg < 5)
+    error->all(FLERR, "Illegal fix elstop command: too few arguments");
 
   Ecut = force->numeric(FLERR, arg[3]);
   if (Ecut <= 0.0) error->all(FLERR, "Illegal fix elstop command: Ecut <= 0");
@@ -186,7 +187,8 @@ void FixElstop::post_force(int /*vflag*/)
 
     // Do fast checks first, only then the region check
 
-    // Avoiding dimers, trimers and even tetramers in case of really high energies
+    // Avoiding dimers, trimers and even tetramers in case of
+    // really high energies
     if (numneigh[i] <= MINNEIGHB) continue;
 
     if (!(mask[i] & groupbit)) continue;
