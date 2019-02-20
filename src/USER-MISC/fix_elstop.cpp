@@ -112,6 +112,18 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   }
 
   if (maxlines == 0) maxlines = DEFAULT_MAXLINES;
+
+
+  // Read the input file for energy ranges and stopping powers.
+  const int ncol = atom->ntypes + 1;
+  memory->create(elstop_ranges, ncol, maxlines, "elstop:tabs");
+  memset(&elstop_ranges[0][0], 0, ncol*maxlines*sizeof(double));
+
+  if (comm->me == 0)
+    read_table(file_name);
+
+  MPI_Bcast(&table_entries, 1 , MPI_INT, 0, world);
+  MPI_Bcast(&elstop_ranges[0][0], ncol*maxlines, MPI_DOUBLE, 0, world);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -143,17 +155,6 @@ void FixElstop::init()
   if (ikeatom < 0)
     error->all(FLERR, "KE compute ID for fix elstop does not exist");
   c_ke = modify->compute[ikeatom];
-
-
-  const int ncol = atom->ntypes + 1;
-  memory->create(elstop_ranges, ncol, maxlines, "elstop:tabs");
-  memset(&elstop_ranges[0][0], 0, ncol*maxlines*sizeof(double));
-
-  if (comm->me == 0)
-    read_table(file_name);
-
-  MPI_Bcast(&table_entries, 1 , MPI_INT, 0, world);
-  MPI_Bcast(&elstop_ranges[0][0], ncol*maxlines, MPI_DOUBLE, 0, world);
 
 
   // need an occasional full neighbor list
