@@ -51,7 +51,6 @@ class FixElstop : public Fix {
   double **elstop_ranges; // [ 0][i]: energies
                           // [>0][i]: stopping powers per type
 
-  int respaflag;
   int regionflag;
   int iregion;
 

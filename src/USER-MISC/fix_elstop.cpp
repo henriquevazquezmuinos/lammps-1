@@ -120,10 +120,6 @@ void FixElstop::init()
   SeLoss_sync_flag = 0;
   SeLoss = 0.0;
 
-  // set rRESPA (Reversible reference system propagation algorithm) flag
-  respaflag = 0;
-  if (strstr(update->integrate_style, "respa")) respaflag = 1;
-
   int ikeatom = modify->find_compute("ke_atom");
   if (ikeatom < 0) {
     char *newarg[3];
