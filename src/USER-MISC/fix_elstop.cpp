@@ -51,10 +51,6 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
 {
   if (narg < 5) error->all(FLERR, "Illegal fix elstop command: too few arguments");
 
-  // ????
-  // set time_depend, else elapsed time accumulation can be messed up
-  time_depend = 1;
-
   scalar_flag = 1;  // Has compute_scalar
   global_freq = 1;  // SeLoss computed every step
   extscalar = 0;    // SeLoss is intensive???
