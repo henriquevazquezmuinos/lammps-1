@@ -88,7 +88,7 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
         error->all(FLERR, "Illegal fix elstop command: maxlines given twice");
       if (iarg+2 > narg)
         error->all(FLERR, "Illegal fix elstop command: maxlines value missing");
-      maxlines = force->numeric(FLERR, arg[iarg+1]);
+      maxlines = force->inumeric(FLERR, arg[iarg+1]);
       if (maxlines <= 0)
         error->all(FLERR, "Illegal fix elstop command: maxlines <= 0");
       iarg += 2;
