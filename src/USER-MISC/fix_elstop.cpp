@@ -254,8 +254,6 @@ void FixElstop::read_table(const char *file)
 {
   char line[MAXLINE];
 
-  fprintf(screen, "Reading elstop table %s\n", file);
-
   FILE *fp = force->open_potential(file);
   if (fp == NULL) {
     char str[128];
