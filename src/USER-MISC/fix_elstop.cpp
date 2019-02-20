@@ -79,10 +79,6 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   Ecut = force->numeric(FLERR, arg[3]);
   if (Ecut <= 0.0) error->all(FLERR, "Illegal fix elstop command: Ecut <= 0");
 
-  n = strlen(arg[4]) + 1;
-  file_name = new char[n];
-  strcpy(file_name, arg[4]);
-
   int iarg = 5;
   iregion = -1;
   maxlines = 0;
@@ -120,7 +116,7 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   memset(&elstop_ranges[0][0], 0, ncol*maxlines*sizeof(double));
 
   if (comm->me == 0)
-    read_table(file_name);
+    read_table(arg[4]);
 
   MPI_Bcast(&table_entries, 1 , MPI_INT, 0, world);
   MPI_Bcast(&elstop_ranges[0][0], ncol*maxlines, MPI_DOUBLE, 0, world);

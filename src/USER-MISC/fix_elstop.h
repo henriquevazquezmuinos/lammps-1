@@ -45,7 +45,6 @@ class FixElstop : public Fix {
   double SeLoss, SeLoss_all; // electronic energy loss
   int SeLoss_sync_flag;      // sync done since last change?
 
-  char *file_name;        // path to elstop file
   int maxlines;           // max number of lines in table
   int table_entries;      // number of table entries actually read
   double **elstop_ranges; // [ 0][i]: energies
