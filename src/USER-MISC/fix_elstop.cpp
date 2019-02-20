@@ -54,6 +54,21 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   extscalar = 0;    // SeLoss compute_scalar is intensive
   nevery = 1;       // Run fix every step
 
+
+  // Make sure the id for the kinetic energy compute is unique
+  // by prepending the ID of this fix.
+  int n = strlen(id) + strlen("_ke_atom") + 1;
+  id_ke_atom = new char[n];
+  strcpy(id_ke_atom, id);
+  strcat(id_ke_atom, "_ke_atom");
+
+  char *newarg[3];
+  newarg[0] = id_ke_atom;
+  newarg[1] = group->names[igroup];
+  newarg[2] = (char *) "ke/atom";
+  modify->add_compute(3, newarg);
+
+
   // args: 0 = fix ID, 1 = group ID,  2 = "elstop"
   //       3 = Ecut,   4 = file path
   // optional rest: "region" <region name>
@@ -64,7 +79,7 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   Ecut = force->numeric(FLERR, arg[3]);
   if (Ecut <= 0.0) error->all(FLERR, "Illegal fix elstop command: Ecut <= 0");
 
-  int n = strlen(arg[4]) + 1;
+  n = strlen(arg[4]) + 1;
   file_name = new char[n];
   strcpy(file_name, arg[4]);
 
@@ -104,7 +119,8 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
 FixElstop::~FixElstop()
 {
   memory->destroy(elstop_ranges);
-  modify->delete_compute("ke_atom");
+  modify->delete_compute(id_ke_atom);
+  delete id_ke_atom;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -123,16 +139,9 @@ void FixElstop::init()
   SeLoss_sync_flag = 0;
   SeLoss = 0.0;
 
-  int ikeatom = modify->find_compute("ke_atom");
-  if (ikeatom < 0) {
-    char *newarg[3];
-    newarg[0] = (char *) "ke_atom";
-    newarg[1] = group->names[igroup];
-    newarg[2] = (char *) "ke/atom";
-    modify->add_compute(3, newarg);
-    ikeatom = modify->find_compute("ke_atom");
-  }
-
+  int ikeatom = modify->find_compute(id_ke_atom);
+  if (ikeatom < 0)
+    error->all(FLERR, "KE compute ID for fix elstop does not exist");
   c_ke = modify->compute[ikeatom];
 
 
