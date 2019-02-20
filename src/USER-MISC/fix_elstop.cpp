@@ -69,18 +69,16 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   strcpy(file_name, arg[4]);
 
   int iarg = 5;
-  regionflag = 0;
   iregion = -1;
   maxlines = 0;
 
   while (iarg < narg) {
     if (strcmp(arg[iarg], "region") == 0) {
-      if (regionflag) error->all(FLERR, "Illegal fix elstop command: region given twice");
+      if (iregion >= 0) error->all(FLERR, "Illegal fix elstop command: region given twice");
       if (iarg+2 > narg) error->all(FLERR, "Illegal fix elstop command: region name missing");
       iregion = domain->find_region(arg[iarg+1]);
-      if (iregion == -1)
+      if (iregion < 0)
         error->all(FLERR, "region ID for fix elstop does not exist");
-      regionflag = 1;
       iarg += 2;
     }
     else if (strcmp(arg[iarg], "maxlines") == 0) {
@@ -195,7 +193,7 @@ void FixElstop::post_force(int /*vflag*/)
     if (energy < elstop_ranges[0][0]) continue;
     if (energy > elstop_ranges[0][table_entries - 1]) continue; // ???
 
-    if (regionflag) {
+    if (iregion >= 0) {
       // Only apply in the given region
       if (domain->regions[iregion]->match(x[i][0], x[i][1], x[i][2]) != 1)
         continue;

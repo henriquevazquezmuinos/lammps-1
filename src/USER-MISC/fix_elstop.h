@@ -51,8 +51,7 @@ class FixElstop : public Fix {
   double **elstop_ranges; // [ 0][i]: energies
                           // [>0][i]: stopping powers per type
 
-  int regionflag;
-  int iregion;
+  int iregion; // region index if used, else -1
 
   class NeighList *list;
   class Compute *c_ke;
