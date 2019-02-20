@@ -37,10 +37,12 @@ class FixElstop : public Fix {
   void init();
   void post_force(int);
   void init_list(int, class NeighList *);
-  void read_table(const char *);
   double compute_scalar();
 
  private:
+  void read_table(const char *);
+  void grow_table();
+
   double Ecut;               // cutoff energy
   double SeLoss, SeLoss_all; // electronic energy loss
   int SeLoss_sync_flag;      // sync done since last change?

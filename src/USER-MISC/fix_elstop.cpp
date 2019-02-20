@@ -40,7 +40,6 @@
 using namespace LAMMPS_NS;
 using namespace FixConst;
 
-#define DEFAULT_MAXLINES 300
 #define MAXLINE 1024
 #define MINNEIGHB 5
 
@@ -72,7 +71,6 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   // args: 0 = fix ID, 1 = group ID,  2 = "elstop"
   //       3 = Ecut,   4 = file path
   // optional rest: "region" <region name>
-  //                "maxlines" <max number of lines in table>
 
   if (narg < 5) error->all(FLERR, "Illegal fix elstop command: too few arguments");
 
@@ -94,31 +92,25 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
         error->all(FLERR, "region ID for fix elstop does not exist");
       iarg += 2;
     }
-    else if (strcmp(arg[iarg], "maxlines") == 0) {
-      if (maxlines > 0)
-        error->all(FLERR, "Illegal fix elstop command: maxlines given twice");
-      if (iarg+2 > narg)
-        error->all(FLERR, "Illegal fix elstop command: maxlines value missing");
-      maxlines = force->inumeric(FLERR, arg[iarg+1]);
-      if (maxlines <= 0)
-        error->all(FLERR, "Illegal fix elstop command: maxlines <= 0");
-      iarg += 2;
-    }
     else error->all(FLERR, "Illegal fix elstop command: unknown argument");
   }
 
-  if (maxlines == 0) maxlines = DEFAULT_MAXLINES;
-
 
   // Read the input file for energy ranges and stopping powers.
+  // First proc 0 reads the file, then bcast to others.
   const int ncol = atom->ntypes + 1;
-  memory->create(elstop_ranges, ncol, maxlines, "elstop:tabs");
-  memset(&elstop_ranges[0][0], 0, ncol*maxlines*sizeof(double));
-
-  if (comm->me == 0)
+  if (comm->me == 0) {
+    maxlines = 1;
+    memory->create(elstop_ranges, ncol, maxlines, "elstop:tabs");
     read_table(arg[4]);
+  }
 
+  MPI_Bcast(&maxlines, 1 , MPI_INT, 0, world);
   MPI_Bcast(&table_entries, 1 , MPI_INT, 0, world);
+
+  if (comm->me != 0)
+    memory->create(elstop_ranges, ncol, maxlines, "elstop:tabs");
+
   MPI_Bcast(&elstop_ranges[0][0], ncol*maxlines, MPI_DOUBLE, 0, world);
 }
 
@@ -243,6 +235,19 @@ void FixElstop::post_force(int /*vflag*/)
 
 /* ---------------------------------------------------------------------- */
 
+double FixElstop::compute_scalar()
+{
+  // only sum across procs when changed since last call
+
+  if (SeLoss_sync_flag == 0) {
+    MPI_Allreduce(&SeLoss, &SeLoss_all, 1, MPI_DOUBLE, MPI_SUM, world);
+    SeLoss_sync_flag = 1;
+  }
+  return SeLoss_all;
+}
+
+/* ---------------------------------------------------------------------- */
+
 void FixElstop::read_table(const char *file)
 {
   char line[MAXLINE];
@@ -259,12 +264,14 @@ void FixElstop::read_table(const char *file)
   const int ncol = atom->ntypes + 1;
 
   int l = 0;
-  while (l < maxlines) {
+  while (true) {
     if (fgets(line, MAXLINE, fp) == NULL) break; // end of file
     if (line[0] == '#') continue; // comment
 
     char *pch = strtok(line, " \t\n\r");
     if (pch == NULL) continue; // blank line
+
+    if (l >= maxlines) grow_table();
 
     int i = 0;
     for ( ; i < ncol && pch != NULL; i++) {
@@ -281,21 +288,24 @@ void FixElstop::read_table(const char *file)
 
   if (table_entries == 0)
     error->one(FLERR, "Did not find any data in elstop table file");
-  if (fgets(line, MAXLINE, fp) != NULL)
-    error->one(FLERR, "fix elstop: Table too long. Increase maxlines.");
 
   fclose(fp);
 }
 
 /* ---------------------------------------------------------------------- */
 
-double FixElstop::compute_scalar()
+void FixElstop::grow_table()
 {
-  // only sum across procs when changed since last call
+  const int ncol = atom->ntypes + 1;
+  int new_maxlines = 2 * maxlines;
 
-  if (SeLoss_sync_flag == 0) {
-    MPI_Allreduce(&SeLoss, &SeLoss_all, 1, MPI_DOUBLE, MPI_SUM, world);
-    SeLoss_sync_flag = 1;
-  }
-  return SeLoss_all;
+  double **new_array;
+  memory->create(new_array, ncol, new_maxlines, "elstop:tabscopy");
+
+  for (int i = 0; i < ncol; i++)
+    memcpy(new_array[i], elstop_ranges[i], maxlines);
+
+  memory->destroy(elstop_ranges);
+  elstop_ranges = new_array;
+  maxlines = new_maxlines;
 }
