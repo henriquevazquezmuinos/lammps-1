@@ -40,9 +40,8 @@
 using namespace LAMMPS_NS;
 using namespace FixConst;
 
-#define BIG 1.0e20
+#define DEFAULT_MAXLINES 300
 #define MAXLINE 1024
-#define MAXTABLEN 300
 #define MINNEIGHB 5
 
 /* ---------------------------------------------------------------------- */
@@ -50,8 +49,9 @@ using namespace FixConst;
 FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   Fix(lmp, narg, arg)
 {
-  if (narg < 5) error->all(FLERR,"Illegal fix elstop command");
+  if (narg < 5) error->all(FLERR, "Illegal fix elstop command: too few arguments");
 
+  // ????
   // set time_depend, else elapsed time accumulation can be messed up
   time_depend = 1;
 
@@ -60,47 +60,50 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   extscalar = 0;    // SeLoss is intensive???
   nevery = 1;       // Run fix every step
 
-  regionflag = 0;
-  iregion = -1;
-
-  int iarg = 0;
-
   // args: 0 = fix ID, 1 = group ID,  2 = "elstop"
   //       3 = Ecut,   4 = file path
-  // optional rest: "region" region name
+  // optional rest: "region" <region name>
+  //                "maxlines" <max number of lines in table>
 
-  // reading in the numerical parameters from fix ID group-ID elstop N Ecut:
   Ecut = force->numeric(FLERR, arg[3]);
-  if (Ecut <= 0.0) error->all(FLERR,"Illegal fix elstop command: cutoff energy cannot be 0 or negative!");
+  if (Ecut <= 0.0) error->all(FLERR, "Illegal fix elstop command: cutoff energy cannot be 0 or negative");
 
   int n = strlen(arg[4]) + 1;
   file_name = new char[n];
   strcpy(file_name, arg[4]);
 
-  iarg = 5;
-  // reading in the regions
+  int iarg = 5;
+  regionflag = 0;
+  iregion = -1;
+  maxlines = 0;
+
   while (iarg < narg) {
-    if (strcmp(arg[iarg],"region") == 0) {
-      if (iarg+2 > narg) error->all(FLERR,"Illegal fix elstop command: region name missing!");
+    if (strcmp(arg[iarg], "region") == 0) {
+      if (regionflag) error->all(FLERR, "Illegal fix elstop command: region given twice");
+      if (iarg+2 > narg) error->all(FLERR, "Illegal fix elstop command: region name missing");
       iregion = domain->find_region(arg[iarg+1]);
       if (iregion == -1)
-        error->all(FLERR,"region ID for fix elstop does not exist");
-      int n = strlen(arg[iarg+1]) + 1;
-      idregion = new char[n];
-      strcpy(idregion,arg[iarg+1]);
+        error->all(FLERR, "region ID for fix elstop does not exist");
       regionflag = 1;
       iarg += 2;
     }
-    else iarg++;
+    else if (strcmp(arg[iarg], "maxlines") == 0) {
+      if (maxlines > 0) error->all(FLERR, "Illegal fix elstop command: maxlines given twice");
+      if (iarg+2 > narg) error->all(FLERR, "Illegal fix elstop command: maxlines value missing");
+      maxlines = force->numeric(FLERR, arg[iarg+1]);
+      if (maxlines <= 0) error->all(FLERR, "Illegal fix elstop command: maxlines <= 0");
+      iarg += 2;
+    }
+    else error->all(FLERR, "Illegal fix elstop command: unknown argument");
   }
-  //fprintf(screen, "Debugging >> %s %s %i\n", file_name, arg[4], narg);
+
+  if (maxlines == 0) maxlines = DEFAULT_MAXLINES;
 }
 
 /* ---------------------------------------------------------------------- */
 
 FixElstop::~FixElstop()
 {
-  list=NULL;
   memory->destroy(elstop_ranges);
   modify->delete_compute("ke_atom");
 }
@@ -118,57 +121,56 @@ int FixElstop::setmask()
 
 void FixElstop::init()
 {
-  eflag = 0;
-  SeLoss=0.0;
-  const int nt = atom->ntypes + 1;
+  SeLoss_sync_flag = 0;
+  SeLoss = 0.0;
+
   // set rRESPA (Reversible reference system propagation algorithm) flag
   respaflag = 0;
-  if (strstr(update->integrate_style,"respa")) respaflag = 1;
+  if (strstr(update->integrate_style, "respa")) respaflag = 1;
 
   int ikeatom = modify->find_compute("ke_atom");
-  if (ikeatom < 0 ){
-    char **newarg = new char*[3];
+  if (ikeatom < 0) {
+    char *newarg[3];
     newarg[0] = (char *) "ke_atom";
     newarg[1] = group->names[igroup];
     newarg[2] = (char *) "ke/atom";
-    modify->add_compute(3,newarg);
+    modify->add_compute(3, newarg);
     ikeatom = modify->find_compute("ke_atom");
-    delete [] newarg;
   }
 
   c_ke = modify->compute[ikeatom];
 
 
-  memory->create(elstop_ranges,nt, MAXTABLEN, "elstop:tabs");
-  memset(&elstop_ranges[0][0],0,nt*MAXTABLEN*sizeof(double));
+  const int ncol = atom->ntypes + 1;
+  memory->create(elstop_ranges, ncol, maxlines, "elstop:tabs");
+  memset(&elstop_ranges[0][0], 0, ncol*maxlines*sizeof(double));
 
-  if (comm->me == 0){
+  if (comm->me == 0)
     read_table(file_name);
-  }
 
   MPI_Bcast(&table_entries, 1 , MPI_INT, 0, world);
-  MPI_Bcast(&elstop_ranges[0][0],nt*MAXTABLEN,MPI_DOUBLE,0,world);
+  MPI_Bcast(&elstop_ranges[0][0], ncol*maxlines, MPI_DOUBLE, 0, world);
+
 
   // need an occasional full neighbor list
-  int irequest = neighbor->request(this,instance_me);
+  int irequest = neighbor->request(this, instance_me);
   neighbor->requests[irequest]->pair = 0;
   neighbor->requests[irequest]->fix = 1;
   neighbor->requests[irequest]->half = 0;
   neighbor->requests[irequest]->full = 1;
   neighbor->requests[irequest]->occasional = 1;
-
 }
 
 /* ---------------------------------------------------------------------- */
 
-void FixElstop::init_list(int id, NeighList *ptr)
+void FixElstop::init_list(int /*id*/, NeighList *ptr)
 {
   list = ptr;
 }
 
 /* ---------------------------------------------------------------------- */
 
-void FixElstop::post_force(int vflag)
+void FixElstop::post_force(int /*vflag*/)
 {
   double **x = atom->x;
   double **v = atom->v;
@@ -176,117 +178,106 @@ void FixElstop::post_force(int vflag)
 
   int *type = atom->type;
   int *mask = atom->mask;
-  int nlocal = atom->nlocal;	// number of atoms in the group
+  int nlocal = atom->nlocal;
   int *numneigh;
-  int i;
-  double ENERGY;
 
-  eflag = 0;
-  c_ke->invoked_peratom = 1;
+  SeLoss_sync_flag = 0;
+  c_ke->invoked_peratom = 1; //????
   c_ke->compute_peratom();
   double *ke = c_ke->vector_atom;
   double dt = update->dt;
   neighbor->build_one(list);
   numneigh = list->numneigh;
 
-  for (int i = 0; i < nlocal; ++i){
+  for (int i = 0; i < nlocal; ++i) {
 
+    // Avoiding dimers, trimers and even tetramers in case of really high energies
+    if (numneigh[i] <= MINNEIGHB) continue;
+
+    if (!(mask[i] & groupbit)) continue;
 
     if (regionflag) {
-      if (domain->regions[iregion]->match(x[i][0],x[i][1],x[i][2]) != 1) continue;  // Start stopping when the group has entered a predefined region
+      // Only apply in the given region
+      if (domain->regions[iregion]->match(x[i][0], x[i][1], x[i][2]) != 1)
+        continue;
     }
 
-    if (numneigh[i]> MINNEIGHB ) {  // Avoiding dimers, trimers and even tetramers in case of really high energies
-      if (mask[i] & groupbit) {
-        int iup=0, idown=1, ihalf=0;
-        int itype = type[i];
-        ENERGY=ke[i];
-        fprintf(screen, "HERE %d %d %g %g %g %d\n", i, type[i], ke[i], ENERGY, elstop_ranges[0][table_entries-1], table_entries);
+    double energy = ke[i];
+    if (energy < Ecut) continue;
+    if (energy < elstop_ranges[0][0]) continue;
+    if (energy > elstop_ranges[0][table_entries - 1]) continue; // ???
 
-        // for (int n = 0; n < 3; n++)
-        //fprintf(screen, "Debugging >> speed in %i-direction: %4.5f | force: %4.5f | energy: %4.5f | timestep length: %2.7f \n ", n, v[i][n], f[i][n], ENERGY, dt);
 
-        /* ---------------------------------------------------------------------- */
-
-        if (ENERGY >= Ecut && ENERGY >= elstop_ranges[0][0] && ENERGY <= elstop_ranges[0][table_entries-1] ) {
-          double Se, Se_lo, Se_hi, E_lo, E_hi;
-          iup=table_entries-1; idown=0;
-          while (true) {
-            ihalf=idown+(iup-idown)/2;
-            if (ihalf==idown) break;
-            if (elstop_ranges[0][ihalf] < ENERGY) idown=ihalf;
-            else iup=ihalf;
-          }
-          Se_lo = elstop_ranges[itype][idown];
-          Se_hi = elstop_ranges[itype][iup];
-          E_lo = elstop_ranges[0][idown];
-          E_hi = elstop_ranges[0][iup];
-
-          /* Get elstop with a simple linear interpolation */
-          Se=(Se_hi-Se_lo)/(E_hi-E_lo)*(ENERGY-E_lo)+Se_lo;
-
-          double v2 = 0.0;
-          for (int n=0 ; n<3 ; ++n ) {
-            v2+=v[i][n]*v[i][n];
-          }
-
-          //fprintf(screen, "Debugging >> %lf %lf %lf %i %i\n", Se, ENERGY, dt, idown,  iup);
-          for (int n=0 ; n<3 ; ++n ) {
-            f[i][n] = f[i][n]-v[i][n]/sqrt(v2)*Se;
-          }
-          SeLoss+=Se*sqrt(v2)*dt; //very rough approx
-        }
-
-        /* ---------------------------------------------------------------------- */
-
-      }
+    // Binary search to find correct energy range
+    int iup = table_entries - 1;
+    int idown = 0;
+    while (true) {
+      int ihalf = idown + (iup - idown) / 2;
+      if (ihalf == idown) break;
+      if (elstop_ranges[0][ihalf] < energy) idown = ihalf;
+      else iup = ihalf;
     }
+
+    int itype = type[i];
+    double Se_lo = elstop_ranges[itype][idown];
+    double Se_hi = elstop_ranges[itype][iup];
+    double E_lo = elstop_ranges[0][idown];
+    double E_hi = elstop_ranges[0][iup];
+
+    // Get elstop with a simple linear interpolation
+    double Se = (Se_hi - Se_lo) / (E_hi - E_lo) * (energy - E_lo) + Se_lo;
+
+    double v2 = v[i][0]*v[i][0] + v[i][1]*v[i][1] + v[i][2]*v[i][2];
+    double vabs = sqrt(v2);
+    double factor = -Se / vabs;
+
+    f[i][0] += v[i][0] * factor;
+    f[i][1] += v[i][1] * factor;
+    f[i][2] += v[i][2] * factor;
+
+    SeLoss += Se * vabs * dt; // very rough approx
   }
 }
 
-void FixElstop::read_table(char *file)
+/* ---------------------------------------------------------------------- */
+
+void FixElstop::read_table(const char *file)
 {
   char line[MAXLINE];
 
-  fprintf(screen, "Reading file %s\n", file);
+  fprintf(screen, "Reading elstop table %s\n", file);
 
   FILE *fp = force->open_potential(file);
   if (fp == NULL) {
     char str[128];
-    sprintf(str,"Cannot open stopping range table %s",file);
-    error->one(FLERR,str);
+    snprintf(str, 128, "Cannot open stopping range table %s", file);
+    error->one(FLERR, str);
   }
 
-  const int nt = atom->ntypes + 1;
-
-  // Why skip the first line???
-  //if (fgets(line,MAXLINE,fp) == NULL)
-  //    error->one(FLERR,"Did not find any data in table file");
+  const int ncol = atom->ntypes + 1;
 
   int l = 0;
-  while (l < MAXTABLEN) {
-    if (fgets(line, MAXLINE, fp) == NULL) break; // no match, skip section
+  while (l < maxlines) {
+    if (fgets(line, MAXLINE, fp) == NULL) break; // end of file
     if (line[0] == '#') continue; // comment
-    if (strspn(line," \t\n\r") == strlen(line)) continue;  // blank line
 
-    // fprintf(screen, "line %d: %s\n", l, line);
-    char *pch = strtok (line," \t\n\r");
-    for (int i = 0; i < nt; i++){
-      fprintf(screen, "line %d word %d: '%s' = %g\n", l, i, pch, atof(pch));
+    char *pch = strtok(line, " \t\n\r");
+    if (pch == NULL) continue; // blank line
+
+    for (int i = 0; i < ncol; i++){
+      if (pch == NULL) error->one(FLERR, "fix elstop: Invalid table line");
       elstop_ranges[i][l] = atof(pch);
-      pch = strtok (NULL, " \t\n\r");
+      pch = strtok(NULL, " \t\n\r");
     }
+    if (pch != NULL) error->one(FLERR, "fix elstop: Invalid table line");
     l++;
   }
-  table_entries=l;
+  table_entries = l;
 
-  if (table_entries == 0) error->one(FLERR,"Did not find any data in table file");
+  if (table_entries == 0) error->one(FLERR, "Did not find any data in elstop table file");
 
-  if (fgets(line,MAXLINE,fp) != NULL){
-    fprintf(screen, "Warning: Only %d entries have been read from the elstop table\n"
-        "Please increase MAXTABLEN=%d value and recompile\n",
-        MAXTABLEN, table_entries);
-  }
+  if (fgets(line, MAXLINE, fp) != NULL)
+    error->one(FLERR, "fix elstop: Table too long. Increase maxlines.");
 
   fclose(fp);
 }
@@ -294,11 +285,11 @@ void FixElstop::read_table(char *file)
 
 double FixElstop::compute_scalar()
 {
-  // only sum across procs one time
+  // only sum across procs when changed since last call
 
-  if (eflag == 0) {
-    MPI_Allreduce(&SeLoss,&SeLoss_all,1,MPI_DOUBLE,MPI_SUM,world);
-    eflag = 1;
+  if (SeLoss_sync_flag == 0) {
+    MPI_Allreduce(&SeLoss, &SeLoss_all, 1, MPI_DOUBLE, MPI_SUM, world);
+    SeLoss_sync_flag = 1;
   }
   return SeLoss_all;
 }

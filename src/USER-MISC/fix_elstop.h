@@ -39,22 +39,24 @@ class FixElstop : public Fix {
   void init();
   void post_force(int);
   void init_list(int, class NeighList *);
-  void read_table(char *);
+  void read_table(const char *);
   double compute_scalar();
 
  private:
-  double Ecut;     // E_stop cutoff energy
-  //double ftm2v;  // conversion of ft/m to velocity
-  //double dt;     // timestep
-  double SeLoss, SeLoss_all; // Electronic energy loss
-  int eflag;
-  int table_entries;
-  double **elstop_ranges;
+  double Ecut;               // cutoff energy
+  double SeLoss, SeLoss_all; // electronic energy loss
+  int SeLoss_sync_flag;      // sync done since last change?
+
+  char *file_name;        // path to elstop file
+  int maxlines;           // max number of lines in table
+  int table_entries;      // number of table entries actually read
+  double **elstop_ranges; // [ 0][i]: energies
+                          // [>0][i]: stopping powers per type
+
   int respaflag;
   int regionflag;
   int iregion;
-  char *idregion;
-  char *file_name;
+
   class NeighList *list;
   class Compute *c_ke;
 };
