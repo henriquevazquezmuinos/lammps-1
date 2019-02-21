@@ -108,7 +108,7 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
   // First proc 0 reads the file, then bcast to others.
   const int ncol = atom->ntypes + 1;
   if (comm->me == 0) {
-    maxlines = 1;
+    maxlines = 300;
     memory->create(elstop_ranges, ncol, maxlines, "elstop:tabs");
     read_table(arg[4]);
   }
@@ -310,7 +310,7 @@ void FixElstop::grow_table()
   memory->create(new_array, ncol, new_maxlines, "elstop:tabscopy");
 
   for (int i = 0; i < ncol; i++)
-    memcpy(new_array[i], elstop_ranges[i], maxlines);
+    memcpy(new_array[i], elstop_ranges[i], maxlines*sizeof(double));
 
   memory->destroy(elstop_ranges);
   elstop_ranges = new_array;
