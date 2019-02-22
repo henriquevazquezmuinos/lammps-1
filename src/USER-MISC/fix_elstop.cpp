@@ -183,7 +183,6 @@ void FixElstop::post_force(int /*vflag*/)
   int *numneigh;
 
   SeLoss_sync_flag = 0;
-  c_ke->invoked_peratom = 1; //????
   c_ke->compute_peratom();
   double *ke = c_ke->vector_atom;
   double dt = update->dt;
