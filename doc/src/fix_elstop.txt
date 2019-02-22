@@ -37,12 +37,12 @@ kinetic energy is smaller than {Ecut}, or smaller than the lowest energy
 value given in the table in {file}. Also, electronic stopping is not
 applied to atoms which have 5 or fewer neighbors.
 
-The applicable electronic stopping powers and energy ranges are read
-from the file {file}. See below for a description of the file format.
-
 If the {region} keyword is used, the atom must also be in the
 specified geometric "region"_region.html in order to have electronic
 stopping applied to it.
+
+The applicable electronic stopping powers and energy ranges are read
+from the file {file}. See below for a description of the file format.
 
 :line
 
