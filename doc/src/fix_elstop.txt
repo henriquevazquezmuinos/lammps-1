@@ -1,0 +1,89 @@
+"LAMMPS WWW Site"_lws - "LAMMPS Documentation"_ld - "LAMMPS Commands"_lc :c
+
+:link(lws,http://lammps.sandia.gov)
+:link(ld,Manual.html)
+:link(lc,Commands_all.html)
+
+:line
+
+fix elstop command :h3
+
+[Syntax:]
+
+fix ID group-ID elstop Ecut file keyword value ... :pre
+
+ID, group-ID are documented in "fix"_fix.html command :ulb,l
+elstop = style name of this fix command :l
+Ecut = minimum kinetic energy for electronic stopping (energy units) :l
+file = name of the file containing the electronic stopping power table :l
+zero or more keyword/value pairs may be appended to args :l
+keyword = {region} :l
+  {region} value = region-ID
+    region-ID = ID of region atoms must be in to have stopping power applied :pre
+:ule
+
+[Examples:]
+
+fix el all elstop 10.0 elstop-table.txt
+fix el mygroup elstop 1.0 elstop-table.txt region bulk :pre
+
+[Description:]
+
+TODO: general description here
+
+If the {region} keyword is used, the atom must also be in the
+specified geometric "region"_region.html in order to have electronic
+stopping applied to it.
+
+:line
+
+The energy ranges and stopping powers are read from the file {file}.
+Lines starting with {#} and empty lines are ignored. Otherwise each
+line must contain exactly N+1 numbers, where N is the number of atom
+types in the simulation.
+
+The first column is the energy for which the stopping powers on that
+line apply. The other columns are the stopping powers for each atom
+type, in ascending order, in force units.
+
+For example:
+
+# This is a comment
+ 10    0    0
+250   60   80
+750  100  150 :pre
+
+The table file below shows two energy ranges: the first from 10 to 250
+energy units, and the second from 250 to 750 energy units. There must
+be exactly two atom types in the simulation. Atoms of type 1 with
+kinetic energies in the first range experience electronic stopping
+below 60 force units. Atoms of type 2 with kinetic energies in the
+second range experience electronic stopping between 80 and 150 force
+units.
+
+:line
+
+[Restart, fix_modify, output, run start/stop, minimize info:]
+
+No information about this fix is written to "binary restart
+files"_restart.html.
+
+The "fix_modify"_fix_modify.html options are not supported.
+
+This fix computes a global scalar, which can be accessed by various
+"output commands"_Howto_output.html. The scalar is the total energy
+loss from electronic stopping applied by this fix since the start of
+the latest run. It is considered "intensive".
+
+The {start/stop} keywords of the "run"_run.html command have no effect
+on this fix.
+
+[Restrictions:]
+
+This pair style is part of the USER-MISC package. It is only enabled if
+LAMMPS was built with that package. See the "Build package"_Build_package.html
+doc page for more info.
+
+[Default:]
+
+The default is no limitation by region.
