@@ -288,6 +288,9 @@ void FixElstop::read_table(const char *file)
     if (i != ncol || pch != NULL) // too short or too long
       error->one(FLERR, "fix elstop: Invalid table line");
 
+    if (l >= 1 && elstop_ranges[0][l] <= elstop_ranges[0][l-1])
+      error->one(FLERR, "fix elstop: Energies must be in ascending order");
+
     l++;
   }
   table_entries = l;
