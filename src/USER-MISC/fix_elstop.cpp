@@ -87,7 +87,6 @@ FixElstop::FixElstop(LAMMPS *lmp, int narg, char **arg) :
 
   int iarg = 5;
   iregion = -1;
-  maxlines = 0;
 
   while (iarg < narg) {
     if (strcmp(arg[iarg], "region") == 0) {
