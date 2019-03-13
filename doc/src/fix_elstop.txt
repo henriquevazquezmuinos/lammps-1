@@ -29,13 +29,45 @@ fix el mygroup elstop 1.0 elstop-table.txt region bulk :pre
 
 [Description:]
 
-TODO: general description here; Mention at least: what is electronic
-stopping, what does the formula look like, linear interpolation
+This fix allows to simulate the slow down of fast ions inside the
+material due to "electronic stopping power"_#elstopping (energy lost 
+via electronic collisions per unit of distance). This fix should be 
+used when simulating irradiation damage or ion implantation, where 
+the ions can lose noticeable amounts of energy in electron scatterings. 
+If the electronic stopping power is not considered, the simulated 
+range of the ions can be severely overestimated ("Nordlund98"_#Nordlund98,
+ "Nordlund95"_#Nordlund95).
 
-The electronic stopping described here is not applied to atoms whose
+
+The electronic stopping is implemented by applying a friction force 
+to the ion as:
+
+:c,image(Eqs/fix_elstop.jpg)
+
+where{ F<sub>0</sub>} is the original force applied to the ion, {v&#x20d7} is its 
+velocity and {S<sub>e</sub>} is the stopping power of the ion.
+
+
+
+NOTE: In addition to electronic stopping, atomic cascades and irradiation 
+simulations require the use of adaptive timestep (see 
+"fix dt/reset"_fix_dt_reset.html) and repulsive ZBL potential (see 
+"ZBL"_pair_zbl.html potential). Without these settings the interaction between the 
+ion and the target atoms will be faulty. It is also common to use in 
+such simulations a thermostat ("fix_nvt"_fix_nvt.html) in the borders of the 
+simulation cell. 
+
+
+At low ion velocities the electronic stopping is negligible. The parameter 
+The electronic friction is not applied to atoms whose
 kinetic energy is smaller than {Ecut}, or smaller than the lowest energy
 value given in the table in {file}. Also, electronic stopping is not
 applied to atoms which have 5 or fewer neighbors.
+
+NOTE: The ion is applied the friction force as soon as it enters the 
+neighbour list of the atoms. In surface simulations this approach 
+can lead to unphysical behaviour if the interaction cutoff is large. 
+In these situations it is recommended to use the region keyword instead.
 
 If the {region} keyword is used, the atom must also be in the
 specified geometric "region"_region.html in order to have electronic
@@ -70,7 +102,24 @@ below 60 force units. Atoms of type 2 with kinetic energies in the
 second range experience electronic stopping between 80 and 150 force
 units.
 
-:line
+
+
+NOTE: Swift Heavy Ions (energy per nucleon of 100 keV/amu or higher)
+deposit most of the energy via electronic stopping. This implementation
+is not suitable for those types of ions. For that purpose one can
+use instead the two-temperature model implementation 
+("fix_ttm"_fix_ttm.html), which takes into account the transfer of 
+energy from the hot electrons in the material to the target atoms.
+
+
+
+The stopping power depends on the energy of the ion and the target 
+material. The electronic stopping table can be obtained from 
+scientific publications, experimental databases or by using 
+"SRIM"_#SRIM software. Other programs such as "CasP"_#CasP or 
+"PASS"_#PASS can calculate the energy deposited as a function 
+of the impact parameter of the ion; these results can be used 
+to derive the stopping power.
 
 [Restart, fix_modify, output, run start/stop, minimize info:]
 
@@ -96,3 +145,22 @@ doc page for more info.
 [Default:]
 
 The default is no limitation by region.
+
+:line
+:link(elstopping)
+[(electronic stopping power)] <a href="https://en.wikipedia.org/wiki/Stopping_power_(particle_radiation)"> Wikipedia - Electronic Stopping Power </a>
+
+:link(Nordlund98)
+[(Nordlund98)] Nordlund, Kai, et al.  Physical Review B 57.13 (1998): 7556.
+
+:link(Nordlund95)
+[(Nordlund95)] Nordlund, Kai. Computational materials science 3.4 (1995): 448-456.
+
+:link(SRIM)
+[(SRIM)] <a href="http://www.srim.org/"> SRIM webpage </a>
+ 
+:link(CasP)
+[(CasP)] <a href="https://www.helmholtz-berlin.de/people/gregor-schiwietz/casp_en.html"> Casp webpage</a>
+
+:link(PASS)
+[(PASS)] <a href="https://www.sdu.dk/en/DPASS"> PASS wepbpage </a>
